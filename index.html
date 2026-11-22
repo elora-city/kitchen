@@ -13,7 +13,7 @@
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,system-ui,sans-serif;overflow-x:clip}
-header{background:var(--brand);color:#fff;padding:18px max(4vw,16px) 0}
+header{background:var(--brand);color:#fff;padding:calc(18px + env(safe-area-inset-top)) max(4vw,16px) 0}
 .hin{max-width:1100px;margin:0 auto}
 .brand{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
 h1{margin:0;font-size:32px;line-height:1.05;font-weight:800;letter-spacing:-.01em}
@@ -554,10 +554,13 @@ async function exportBackup(){const data=Object.fromEntries(KEYS.map(k=>[k,S[k]]
   if(!STANDALONE){try{const dl=await claude.use('downloads');if(dl){await dl.save({filename:name,data:json});localStorage.setItem('ek_lastBackup',todayS());toast('Backup saved');render();return}}catch(e){if(e&&e.code==='declined')return;toast('Couldn’t save the file here — use “Copy as text” instead');return}}
   try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});localStorage.setItem('ek_lastBackup',todayS());render();return}}catch(e){if(e&&e.name==='AbortError')return}
   const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);localStorage.setItem('ek_lastBackup',todayS());toast('Backup saved');render()}
-async function importBackup(file){try{const j=JSON.parse(await file.text());const d=j&&j.data?j.data:j;if(!d||!Array.isArray(d.recipes))throw 0;
+function readBackup(t){t=String(t||'').trim();const a=t.indexOf('{'),b=t.lastIndexOf('}');if(a<0)throw{msg:'There’s no backup in that text.'};
+  let j;try{j=JSON.parse(t.slice(a,b+1))}catch(e){try{const t2=t.slice(a,b+1).replace(/^(\s*[{,]\s*)[“”]|[“”](\s*:)/gm,'$1"$2');j=JSON.parse(t2)}catch(e2){throw{msg:`The backup text is incomplete (${Math.round(t.length/1024)} KB came through) — part of it was cut off when copying. Use “Save backup file” instead.`}}}
+  const d=j&&j.data?j.data:j;if(!d||!Array.isArray(d.recipes))throw{msg:'That isn’t a backup from Elo’s Kitchen.'};return{j,d}}
+async function importBackup(file,txt){try{const{j,d}=readBackup(txt!=null?txt:await file.text());
   if(!confirm(`Replace everything in the app with this backup (${d.recipes.length} recipes)?`))return;for(const k of KEYS)if(d[k]!==undefined)S[k]=d[k];
   if(j.photos){for(const[id,v]of Object.entries(j.photos)){PH[id]=v;if(STANDALONE)try{await idbPut(id,v)}catch(e){}}}
-  fixShape();migrate();KEYS.forEach(k=>{DIRTY[k]=1;flush(k)});render();toast(`Restored ${d.recipes.length} recipes`)}catch(e){toast('That file isn’t a backup from this app')}}
+  fixShape();migrate();KEYS.forEach(k=>{DIRTY[k]=1;flush(k)});render();toast(`Restored ${d.recipes.length} recipes`)}catch(e){toast(e&&e.msg?e.msg:'That file isn’t a backup from Elo’s Kitchen')}}
 const backupDue=()=>{const l=localStorage.getItem('ek_lastBackup');return S.recipes.length>0&&(!l||l<addDays(todayS(),-14))};
 /* ---------- Claude ---------- */
 async function ask(prompt,opts){
@@ -941,7 +944,7 @@ function saveTimers(){try{localStorage.setItem('ek_timers',JSON.stringify(TM))}c
 function drawTimers(){const el=$('#tbar');if(!el)return;const now=Date.now();
   el.innerHTML=TM.map(t=>{const left=Math.max(0,Math.round((t.end-now)/1000));if(!left&&!t.rang){t.rang=1;beep();toast(t.label+' — time’s up!')}const mm=Math.floor(left/60),ss=String(left%60).padStart(2,'0');return`<div class="tmr ${left?'':'done'}"><span>${esc(t.label)}</span><span>${left?`${mm}:${ss}`:'Done!'}</span><button class="x" data-a="tstop" data-id="${t.id}" aria-label="Stop timer">×</button></div>`}).join('');
   if(!TM.length&&tint){clearInterval(tint);tint=null}}
-function mText(){return`<div class="slh"><h3 style="margin:0">${esc(M.title)}</h3><button class="x" data-a="close" aria-label="Close">×</button></div><p class="sub" style="margin:0">Select all and copy.</p><textarea id="mtext" rows="12" readonly>${esc(M.text)}</textarea><div class="row"><button class="btn" data-a="close">Done</button></div>`}
+function mText(){return`<div class="slh"><h3 style="margin:0">${esc(M.title)}</h3><button class="x" data-a="close" aria-label="Close">×</button></div><p class="sub" style="margin:0">Tap “Copy all”. ${M.text.length>20000?'This text is long — a file is safer: use “Save backup file”.':''}</p><textarea id="mtext" rows="8" readonly>${esc(M.text)}</textarea><div class="row"><button class="btn pri" data-a="copyall">Copy all</button><button class="btn" data-a="close">Done</button></div>`}
 async function copy(text,title){try{await navigator.clipboard.writeText(text);toast('Copied')}catch(e){M={t:'text',title,text};drawModal()}}
 
 /* ---------- actions ---------- */
@@ -1077,6 +1080,7 @@ document.addEventListener('click',async ev=>{
     for(const d of next)slotArr(d,M.loSlot).push(Object.assign({id:uid(),r:M.rid,eat:1,cook:0,lo:true,src:id,ate:false},side,main.ov?{ov:main.ov}:{}));
     const extra=Object.keys(M.also||{}).filter(d=>d!==M.d);for(const d of extra){const c=Object.assign({id:uid(),r:M.rid,eat:M.eat,cook:M.eat,lo:false,ate:false},side,main.ov?{ov:main.ov}:{});slotArr(d,M.s).push(c)}
     save('plan');const n=next.length;closeM();render();if(extra.length){toast(`Added to ${extra.length+1} days`,true);break}toast((ate?'Logged as eaten':'Added to plan')+(n?`, plus ${n} leftover meal${n===1?'':'s'}`:'')+(ov&&ov.forever?' · recipe updated':ov?' · edited for this day':''),true);break}
+  case'copyall':{const t=$('#mtext');t.focus();t.setSelectionRange(0,t.value.length);let ok=false;try{ok=document.execCommand('copy')}catch(e){}toast(ok?`Copied all ${Math.round(t.value.length/1024)} KB`:'Selected — now tap Copy');break}
   case'undo':undo();break;
   case'nmopen':{const d=M&&M.d||day,sl=M&&M.s||autoSlot();openNew(d,sl,'');break}
   case'nmday':{M.name=val('nn');M.ing=val('ni');M.s=val('ns');M.ate=$('#nate').checked;M.gro=$('#ngro').checked;M.keep=$('#nkeep').checked;if(M.days[D.d])delete M.days[D.d];else M.days[D.d]=1;drawModal();nmCalc();break}
@@ -1194,7 +1198,7 @@ document.addEventListener('click',async ev=>{
   case'delextra':S.extra=S.extra.filter(x=>x.id!==D.id);save('extra');render();break;
   case'bkfile':exportBackup();break;
   case'backup':copy(JSON.stringify(Object.fromEntries(KEYS.map(k=>[k,S[k]]))),'Backup');break;
-  case'restore':{try{const j=JSON.parse(val('restore'));if(!j||typeof j!=='object'||!Array.isArray(j.recipes))throw 0;for(const k of KEYS)if(j[k]!==undefined)S[k]=j[k];fixShape();KEYS.forEach(save);render();toast('Backup restored')}catch(e){toast('That doesn’t look like a backup from this app')}break}
+  case'restore':importBackup(null,val('restore'));break;
   }
 });
 document.addEventListener('change',ev=>{const t=ev.target;
