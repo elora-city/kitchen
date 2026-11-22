@@ -87,6 +87,7 @@ a.btn{text-decoration:none}
 .rtools{display:flex;gap:8px;margin:6px 0}.rtools input{flex:1;min-width:0;min-height:42px}.rtools select{flex:none;width:auto;max-width:150px;min-height:42px}
 .fbar{display:flex;gap:6px;overflow-x:auto;flex-wrap:nowrap;margin:0 0 8px;padding:2px 0 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.fbar::-webkit-scrollbar{display:none}
 .fbar .btn{flex:none;min-height:34px!important;padding:4px 12px!important;font-size:13.5px!important;border-radius:999px;white-space:nowrap}
+[hidden]{display:none!important}
 #fab{position:fixed;right:20px;bottom:24px;width:60px;height:60px;border-radius:50%;border:0;background:var(--brand);color:#fff;font:400 34px/1 Figtree,sans-serif;box-shadow:0 8px 24px #c2185b55;cursor:pointer;z-index:16}
 #toast.act{pointer-events:auto}
 @media(max-width:700px){nav{position:fixed;left:0;right:0;bottom:0;margin:0;z-index:15;background:var(--brand);justify-content:space-between;gap:0;padding:0 2px env(safe-area-inset-bottom);box-shadow:0 -4px 16px #0002}nav button{flex:1 1 0;padding:12px 0;font-size:11px;letter-spacing:-.01em;border-bottom:0;border-top:3px solid transparent}nav button.on{border-top-color:#fff}nav .lg{display:none}nav .sm{display:inline}header{padding-bottom:14px}main{padding-bottom:150px}#fab{bottom:78px;right:16px}#tbar{bottom:150px!important}#toast{bottom:150px!important}}
@@ -840,6 +841,7 @@ function drawModal(){let o=$('#ov');if(!M){if(o)o.remove();return}
   o.innerHTML=`<div class="md" role="dialog" aria-modal="true">${M.t==='add'?mAdd():M.t==='rec'?mRec():M.t==='side'?mSide():M.t==='cook'?mCook():M.t==='edit'?mEdit():M.t==='combo'?mCombo():M.t==='cedit'?mCEdit():M.t==='feel'?mFeel():M.t==='nm'?mNew():M.t==='copy'?mCopy():M.t==='more'?mMore():mText()}</div>`;
   const f=o.querySelector('#mq,#rn,#mtext,#cname');if(f&&!M.focused){f.focus();M.focused=1}}
 function closeM(){M=null;drawModal()}
+function syncAdd(){if(!M||M.t!=='add')return;if($('#meat'))M.eat=Math.max(.1,+val('meat')||1);if($('#mg'))M.g=val('mg');if($('#mgs'))M.gs=Math.max(.25,+val('mgs')||1);const r=rec(M.rid);if(r&&$('#oing'))M.ov=readOv(r)}
 function openAdd(d,s,rid,o){M=Object.assign({t:'add',d,s,q:'',rid:rid||null,eat:1,ate:false,nog:false,ingOpen:true,lo:{},loSlot:s==='d'?'l':s,g:rid?defSideId(rec(rid),s):'',gs:1},o||{});drawModal()}
 const listHTML=()=>{const q=nm(M.q);const l=myR().filter(r=>(!q||nm(r.name).includes(q)||(r.ing||[]).some(i=>nm(i.n).includes(q)))&&(M.allTypes||q||!(r.type||[]).length||(r.type||[]).includes(M.s))).sort((a,b)=>a.name.localeCompare(b.name));
   const row=r=>{const c=canMake(r,1);return`<button class="li" data-a="mpick" data-id="${r.id}"><b>${esc(r.name)}</b><span>${macTxt(r.m||{})}</span>${c.leftLeft?'<span class="sub ok">Leftovers in your fridge</span>':c.ok?`<span class="sub ok">You have everything${c.maxSv>=1?` · enough for ${c.maxSv}`:''}</span>`:S.pantry.length?`<span class="sub">Need to buy: ${esc(c.miss.slice(0,4).join(', '))}${c.miss.length>4?` +${c.miss.length-4} more`:''}</span>`:''}</button>`};
@@ -888,22 +890,22 @@ function mAdd(){const r=M.rid&&rec(M.rid);
   let h=`<div class="slh"><h3 style="margin:0">Add to plan</h3><span class="row" style="margin:0;gap:6px">${r?'<button class="btn sm pri" data-a="madd">Add</button>':''}<button class="x" data-a="close" aria-label="Close">×</button></span></div><div class="form" style="margin:0"><label style="grid-column:span 2">Day<input id="mdate" type="date" value="${M.d}"></label><label style="grid-column:span 2">Meal<select id="mslot">${SLOTS.map(([k,l])=>`<option value="${k}" ${k===M.s?'selected':''}>${l}</option>`).join('')}</select></label></div>`;
   if(!r){h+=`<button class="btn" data-a="nmopen" style="width:100%">+ New meal from ingredients</button><details><summary>Ate out? Enter the macros</summary><div class="form" style="margin-top:8px"><label class="full">Name<input id="lgName" placeholder="e.g. chicken shawarma plate"></label><label>kcal<input id="lgK" type="number" inputmode="decimal"></label><label>Protein g<input id="lgP" type="number" inputmode="decimal"></label><label>Carbs g<input id="lgC" type="number" inputmode="decimal"></label><label>Fat g<input id="lgF" type="number" inputmode="decimal"></label><label>Fibre g<input id="lgFi" type="number" inputmode="decimal"></label></div><button class="btn" data-a="addlog">Log it as eaten</button></details><input id="mq" placeholder="Search your recipes" value="${esc(M.q)}"><div id="mlist" class="mlist">${listHTML()}</div>`;
     if(!myR().length)h+=`<p class="empty">No recipes yet — add them in Recipes first.</p>`;return h}
-  const next=[1,2,3,4,5,6].map(i=>addDays(M.d,i)),loN=next.filter(d=>M.lo[d]).length,cook=(+M.eat||1)+loN,x=cook/(r.servings||1);
+  const fresh=M.mode==='fresh',next=fresh?[]:Object.keys(M.lo).filter(d=>M.lo[d]&&d>M.d).sort(),extra=fresh?Object.keys(M.also||{}).filter(d=>M.also[d]&&d!==M.d).sort():[],loN=next.length,cook=(+M.eat||1)+loN,x=cook/(r.servings||1),nDays=1+loN+extra.length;
   return h+`<div class="picked"><div class="slh"><b>${esc(r.name)}</b><button class="btn sm ghost" data-a="mchange">Change</button></div><span>${macTxt(r.m||{})} <span class="sub">per serving · recipe makes ${r.servings}</span></span></div>
   ${ingEditor(M.ov?M.ov.ing:r.ing,M.ov?M.ov.m:r.m,r.servings,'Also save these changes to the recipe for good')}
   <div class="srow"><div><span class="lbl">Servings you'll eat</span>${stepper('meat',M.eat,.5,.25)}</div>${portionG(rOv(r,M.ov))?`<div><span class="lbl">or grams you'll eat${r.cw&&!M.ov?'':' (≈ raw weight)'}</span><input id="mgr" class="big" type="number" inputmode="decimal" value="${r0(M.eat*portionG(rOv(r,M.ov)))}"></div>`:''}</div>
   <h4>Side</h4>${sides().length?`<div class="form" style="margin:0"><label style="grid-column:span 3">Side dish<select id="mg"><option value="">No side</option>${sides().filter(x=>x.id!==r.id).map(x=>`<option value="${x.id}" ${x.id===M.g?'selected':''}>${esc(x.name)} · ${r0((x.m||{}).k)} kcal</option>`).join('')}</select></label></div><div class="srow"><div><span class="lbl">Side servings</span>${stepper('mgs',M.gs,.5,.25)}</div></div>`:'<p class="sub" style="margin:0">Add side dishes (for example the suggested recipes in Recipes) to choose a side.</p>'}
   <div class="fitp" id="mfit">${fitPanel()}</div>
   <p style="margin:0" hidden>This meal: <span id="mmac">${macTxt(entryNut({r:r.id,eat:+M.eat||1,g:M.g,gs:M.gs,ov:M.ov&&!M.ov.forever?M.ov:null}))}</span></p>
-  <details ${M.also&&Object.keys(M.also).length?'open':''}><summary>Also add it to other days</summary><div id="malso">${dayChips(M.d,Object.assign({[M.d]:1},M.also||{}),'madday')}</div><p class="note" style="margin:0">Each extra day gets the same meal (cooked fresh that day).</p></details>
   <label class="ck big"><input type="checkbox" id="mate" ${M.ate?'checked':''}> Already eaten</label>
   <label class="ck" ${M.ate?'':'hidden'} id="mcookw"><input type="checkbox" id="mcooked" ${M.cookedNow?'checked':''}> I cooked it now — take the ingredients out of my fridge &amp; pantry</label>
   <label class="ck"><input type="checkbox" id="mgro" ${M.nog?'':'checked'}> Add its ingredients to the grocery list</label>
-  <h4>Batch cooking &amp; leftovers</h4><p class="sub" style="margin:0">Tick the days you'll eat leftovers (1 serving each). They're added to your plan with the same side, which you can change on each meal later.</p>
-  <label>Leftovers go in<select id="mlos">${SLOTS.map(([k,l])=>`<option value="${k}" ${k===M.loSlot?'selected':''}>${l}</option>`).join('')}</select></label>
-  <div class="days">${next.map(d=>`<label class="ck"><input type="checkbox" data-lo="${d}" ${M.lo[d]?'checked':''}> ${fmtDay(d)}</label>`).join('')}</div>
-  ${next.filter(d=>M.lo[d]&&d>addDays(M.d,3)).length?`<p class="warn" style="margin:6px 0">Leftovers keep about 3 days in the fridge. Freeze the portions for ${next.filter(d=>M.lo[d]&&d>addDays(M.d,3)).map(fmtDay).join(', ')} on cooking day and move each to the fridge the night before.</p>`:''}
-  <p style="margin:4px 0" id="mcook">Cook <b>${cook}</b> serving${cook===1?'':'s'}${Math.abs(x-1)>.01?` <span class="sub">(${+x.toFixed(2)}× the recipe — the grocery list scales to this)</span>`:''}</p>
+  <h4>Days</h4><p class="sub" style="margin:0">Tap every day you'll eat this meal.</p>
+  ${dayChips(M.d,Object.assign({[M.d]:1},fresh?M.also||{}:M.lo),'madday')}
+  ${nDays>1?`<div class="seg wide"><button type="button" class="${fresh?'':'on'}" data-a="mmode" data-v="batch">Cook once, eat leftovers</button><button type="button" class="${fresh?'on':''}" data-a="mmode" data-v="fresh">Cook fresh each day</button></div>
+  ${fresh?'':`<p class="sub" style="margin:0">You cook on <b>${fmtDay(M.d)}</b>; the other days get 1 leftover serving each.</p><label>Leftovers go in<select id="mlos">${SLOTS.map(([k,l])=>`<option value="${k}" ${k===M.loSlot?'selected':''}>${l}</option>`).join('')}</select></label>`}`:''}
+  ${next.filter(d=>d>addDays(M.d,3)).length?`<p class="warn" style="margin:6px 0">Leftovers keep about 3 days in the fridge. Freeze the portions for ${next.filter(d=>d>addDays(M.d,3)).map(fmtDay).join(', ')} on cooking day and move each to the fridge the night before.</p>`:''}
+  <p style="margin:4px 0" id="mcook">${fresh&&extra.length?`Cook <b>${+M.eat||1}</b> serving${(+M.eat||1)===1?'':'s'} on each of ${nDays} days — <b>${r0(((+M.eat||1)*nDays)*10)/10}</b> in total`:`Cook <b>${cook}</b> serving${cook===1?'':'s'}${loN?` on ${fmtDay(M.d)} (${+M.eat||1} now + ${loN} leftover${loN===1?'':'s'})`:''}`}${Math.abs(x-1)>.01&&!(fresh&&extra.length)?` <span class="sub">(${+x.toFixed(2)}× the recipe — the grocery list scales to this)</span>`:''}</p>
   <div class="row"><button class="btn pri" data-a="madd">Add to plan</button><button class="btn" data-a="close">Cancel</button></div>`}
 function addNums(){const r=rec(M.rid);if(!r)return;if($('#oing'))M.ov=readOv(r);const html=mAdd();const tmp=document.createElement('div');tmp.innerHTML=html;for(const id of['mmac','mcook','mfit']){const a=document.getElementById(id),b=tmp.querySelector('#'+id);if(a&&b)a.innerHTML=b.innerHTML}}
 function syncRecForm(){if(!M||M.t!=='rec')return;const r=M.r;Object.assign(r,{name:val('rn'),servings:+val('rs')||r.servings,time:+val('rt')||0,steps:val('rst'),ing:val('ri').split('\n').map(parseIng).filter(Boolean),type:[...document.querySelectorAll('.rty:checked')].map(x=>x.value),m:Object.assign({},r.m,{k:+val('rk')||0,p:+val('rpp')||0,c:+val('rc')||0,f:+val('rf')||0})})}
@@ -1078,11 +1080,11 @@ document.addEventListener('click',async ev=>{
   case'mchange':M.ov=null;M.rid=null;M.lo={};drawModal();break;
   case'madd':{M.eat=Math.max(.1,+val('meat')||1);if($('#mg'))M.g=val('mg');if($('#mgs'))M.gs=Math.max(.25,+val('mgs')||1);
     const r=rec(M.rid),ov=r&&readOv(r),ate=$('#mate')?$('#mate').checked:!!M.ate,nog=$('#mgro')?!$('#mgro').checked:!!M.nog;
-    const next=[1,2,3,4,5,6].map(i=>addDays(M.d,i)).filter(d=>M.lo[d]);const id=uid(),side=Object.assign(M.g?{g:M.g,gs:M.gs||1}:{},nog?{nog:true}:{});snap();
+    const next=M.mode==='fresh'?[]:Object.keys(M.lo).filter(d=>M.lo[d]&&d>M.d).sort();const id=uid(),side=Object.assign(M.g?{g:M.g,gs:M.gs||1}:{},nog?{nog:true}:{});snap();
     const main=Object.assign({id,r:M.rid,eat:M.eat,cook:M.eat+next.length,lo:false,ate:false},side);applyOv(main,r,ov);slotArr(M.d,M.s).push(main);if(ate)setAte(main,M.d,true);if(ate&&$('#mcooked')&&$('#mcooked').checked){delete main.nog;markCooked(main,M.d,true);main.nog=true}
     for(const d of next)slotArr(d,M.loSlot).push(Object.assign({id:uid(),r:M.rid,eat:1,cook:0,lo:true,src:id,ate:false},side,main.ov?{ov:main.ov}:{}));
-    const extra=Object.keys(M.also||{}).filter(d=>d!==M.d);for(const d of extra){const c=Object.assign({id:uid(),r:M.rid,eat:M.eat,cook:M.eat,lo:false,ate:false},side,main.ov?{ov:main.ov}:{});slotArr(d,M.s).push(c)}
-    save('plan');const n=next.length;closeM();render();if(extra.length){toast(`Added to ${extra.length+1} days`,true);break}toast((ate?'Logged as eaten':'Added to plan')+(n?`, plus ${n} leftover meal${n===1?'':'s'}`:'')+(ov&&ov.forever?' · recipe updated':ov?' · edited for this day':''),true);break}
+    const extra=M.mode==='fresh'?Object.keys(M.also||{}).filter(d=>M.also[d]&&d!==M.d):[];for(const d of extra){const c=Object.assign({id:uid(),r:M.rid,eat:M.eat,cook:M.eat,lo:false,ate:false},side,main.ov?{ov:main.ov}:{});slotArr(d,M.s).push(c)}
+    save('plan');const n=next.length;closeM();render();if(extra.length){toast(`Added to ${extra.length+1} days — cook fresh each day`,true);break}toast((ate?'Logged as eaten':'Added to plan')+(n?`, plus ${n} leftover meal${n===1?'':'s'}`:'')+(ov&&ov.forever?' · recipe updated':ov?' · edited for this day':''),true);break}
   case'copyall':{const t=$('#mtext');t.focus();t.setSelectionRange(0,t.value.length);let ok=false;try{ok=document.execCommand('copy')}catch(e){}toast(ok?`Copied all ${Math.round(t.value.length/1024)} KB`:'Selected — now tap Copy');break}
   case'undo':undo();break;
   case'nmopen':{const d=M&&M.d||day,sl=M&&M.s||autoSlot();openNew(d,sl,'');break}
@@ -1091,7 +1093,10 @@ document.addEventListener('click',async ev=>{
   case'nmsave':{const ing=val('ni').split('\n').map(parseIng).filter(Boolean),days=Object.keys(M.days).sort(),sl=val('ns')||M.s;if(!ing.length){toast('Add at least one ingredient');break}if(!days.length){toast('Pick at least one day');break}
     const c=calcIng(ing,1);const name=val('nn').trim()||ing.slice(0,3).map(i=>i.n).join(', ');const r=makeQuick(name.charAt(0).toUpperCase()+name.slice(1),ing,sl,$('#nkeep').checked);if(!c.ok)r.m=Object.assign({k:0,p:0,c:0,f:0},r.m);
     const n=addMealDays(r.id,sl,days,$('#nate').checked,$('#ngro').checked);closeM();render();toast(`${esc(r.name)} added to ${n} day${n===1?'':'s'}${c.ok?'':' — some ingredients have no data yet'}`,true);break}
-  case'madday':{if(!M.also)M.also={};if(M.also[D.d])delete M.also[D.d];else M.also[D.d]=1;const el=$('#malso');if(el)el.innerHTML=dayChips(M.d,Object.assign({[M.d]:1},M.also),'madday');break}
+  case'madday':{syncAdd();const sel=new Set([M.d,...Object.keys(M.mode==='fresh'?M.also||{}:M.lo).filter(d=>(M.mode==='fresh'?M.also:M.lo)[d])]);if(sel.has(D.d)){if(sel.size>1)sel.delete(D.d)}else sel.add(D.d);const ds=[...sel].sort();
+    if(M.mode==='fresh'){if(!sel.has(M.d))M.d=ds[0];M.also=Object.fromEntries(ds.filter(d=>d!==M.d).map(d=>[d,1]))}else{M.d=ds[0];M.lo=Object.fromEntries(ds.slice(1).map(d=>[d,1]))}
+    if(!M.mode&&ds.length>1)M.mode='batch';drawModal();break}
+  case'mmode':{syncAdd();const ds=[M.d,...Object.keys(M.mode==='fresh'?M.also||{}:M.lo)].filter((d,i,a)=>a.indexOf(d)===i).sort();M.mode=D.v;M.d=ds[0];if(D.v==='fresh'){M.also=Object.fromEntries(ds.slice(1).map(d=>[d,1]));M.lo={}}else{M.lo=Object.fromEntries(ds.slice(1).map(d=>[d,1]));M.also={}}drawModal();break}
   case'copyday':M={t:'copy',from:D.d,id:D.id||'',days:{}};drawModal();break;
   case'cpday':if(M.days[D.d])delete M.days[D.d];else M.days[D.d]=1;drawModal();break;
   case'cpsave':{const ds=Object.keys(M.days);if(!ds.length){toast('Pick at least one day');break}snap();let n=0;
@@ -1214,7 +1219,7 @@ document.addEventListener('change',ev=>{const t=ev.target;
     if(t.id==='mgro'){M.nog=!t.checked;return}
     if(t.id==='oing'||t.id==='osave'||/^om_/.test(t.id))return;
     if(t.dataset.lo){M.lo[t.dataset.lo]=t.checked;drawModal();return}
-    if(t.id==='mdate'){if(t.value){M.d=t.value;M.lo={}}drawModal();return}
+    if(t.id==='mdate'){if(t.value){M.d=t.value;M.lo={};M.also={}}drawModal();return}
     if(t.id==='mslot'){M.s=t.value;if(M.rid){if(!M.gTouched)M.g=defSideId(rec(M.rid),M.s);drawModal();return}$('#mlist').innerHTML=listHTML();return}
     if(t.id==='mg'){M.g=t.value;M.gTouched=1;drawModal();return}
 }
