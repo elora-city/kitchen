@@ -462,7 +462,7 @@ async function init(){
   try{const tm=JSON.parse(localStorage.getItem('ek_timers')||'[]');for(const t of tm)if(t.end>Date.now()-36e5)TM.push(t);if(TM.length){tint=setInterval(drawTimers,1000)}}catch(e){}
   loadLocal();fixShape();migrate();QS=autoSlot();route();
   if(STANDALONE){status('Saved on this phone');try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}Object.assign(PH,await idbAll());render();
-    if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});return}
+    if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(g=>g.update()).catch(()=>{});let swr=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(swr)return;swr=true;if(!M)location.reload()});return}
   try{db=await claude.use('db');const u=await claude.use('user');me=u?await u.id():null}catch(e){db=null}
   if(!db||!me){db=null;status('Saving in this browser only',true);return}
   status('Loading your kitchen…');
